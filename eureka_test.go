@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEurekaClient_RegisterApplication(t *testing.T) {
@@ -22,12 +24,8 @@ func TestEurekaClient_RegisterApplication(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/eureka/v2/apps/test-app" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		assert.Equal(t, "/eureka/v2/apps/test-app", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
 
 		var body struct {
 			Instance Instance `json:"instance"`
@@ -36,9 +34,7 @@ func TestEurekaClient_RegisterApplication(t *testing.T) {
 		if err := decoder.Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body.Instance != instance {
-			t.Errorf("unexpected body: %+v", body)
-		}
+		assert.Equal(t, instance, body.Instance)
 
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -49,19 +45,13 @@ func TestEurekaClient_RegisterApplication(t *testing.T) {
 		BaseURL: srv.URL,
 	}
 
-	if err := cli.RegisterApplication(instance); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, cli.RegisterApplication(instance))
 }
 
 func TestEurekaClient_DeregisterApplication(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/eureka/v2/apps/test-app/test-instance" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodDelete {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		assert.Equal(t, "/eureka/v2/apps/test-app/test-instance", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -74,19 +64,13 @@ func TestEurekaClient_DeregisterApplication(t *testing.T) {
 	appID := "test-app"
 	instanceID := "test-instance"
 
-	if err := cli.DeregisterApplication(appID, instanceID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, cli.DeregisterApplication(appID, instanceID))
 }
 
 func TestEurekaClient_Heartbeat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/eureka/v2/apps/test-app/test-instance" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		assert.Equal(t, "/eureka/v2/apps/test-app/test-instance", r.URL.Path)
+		assert.Equal(t, http.MethodPut, r.Method)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -99,9 +83,7 @@ func TestEurekaClient_Heartbeat(t *testing.T) {
 	appID := "test-app"
 	instanceID := "test-instance"
 
-	if err := cli.Heartbeat(appID, instanceID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, cli.Heartbeat(appID, instanceID))
 }
 
 func TestEurekaClient_HeartbeatNotFound(t *testing.T) {
@@ -118,23 +100,14 @@ func TestEurekaClient_HeartbeatNotFound(t *testing.T) {
 	appID := "test-app"
 	instanceID := "test-instance"
 
-	err := cli.Heartbeat(appID, instanceID)
-	if err != ErrInstanceIDNotFound {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.EqualError(t, cli.Heartbeat(appID, instanceID), ErrInstanceIDNotFound.Error())
 }
 
-func TestEurekaClient_OutOfService(t *testing.T) {
+func TestEurekaClient_OverrideStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/eureka/v2/apps/test-app/test-instance/status" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		if r.URL.Query().Get("value") != "OUT_OF_SERVICE" {
-			t.Errorf("unexpected query: %s", r.URL.Query().Get("value"))
-		}
-		if r.Method != http.MethodPut {
-			t.Errorf("unexpected method: %s", r.Method)
-		}
+		assert.Equal(t, "/eureka/v2/apps/test-app/test-instance/status", r.URL.Path)
+		assert.Equal(t, http.MethodPut, r.Method)
+		assert.Equal(t, "OUT_OF_SERVICE", r.URL.Query().Get("value"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -147,12 +120,10 @@ func TestEurekaClient_OutOfService(t *testing.T) {
 	appID := "test-app"
 	instanceID := "test-instance"
 
-	if err := cli.OutOfService(appID, instanceID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, cli.OverrideStatus(appID, instanceID, StatusOutOfService))
 }
 
-func TestEurekaClient_OutOfServiceUpdateFailed(t *testing.T) {
+func TestEurekaClient_OverrideStatusFailed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -163,23 +134,14 @@ func TestEurekaClient_OutOfServiceUpdateFailed(t *testing.T) {
 		BaseURL: srv.URL,
 	}
 
-	err := cli.OutOfService("test-app", "test-instance")
-	if err != ErrStatusUpdateFailed {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.EqualError(t, cli.OverrideStatus("test-app", "test-instance", StatusOutOfService), ErrStatusUpdateFailed.Error())
 }
 
-func TestEurekaClient_BackInService(t *testing.T) {
+func TestEurekaClient_RemoveStatusOverride(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/eureka/v2/apps/test-app/test-instance/status" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		if r.URL.Query().Get("value") != "UP" {
-			t.Errorf("unexpected query: %s", r.URL.Query().Get("value"))
-		}
-		if r.Method != http.MethodDelete {
-			t.Errorf("unexpected method: %s", r.Method)
-		}
+		assert.Equal(t, "/eureka/v2/apps/test-app/test-instance/status", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
+		assert.Equal(t, "UP", r.URL.Query().Get("value"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -192,12 +154,10 @@ func TestEurekaClient_BackInService(t *testing.T) {
 	appID := "test-app"
 	instanceID := "test-instance"
 
-	if err := cli.BackInService(appID, instanceID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, cli.RemoveStatusOverride(appID, instanceID))
 }
 
-func TestEurekaClient_BackInServiceUpdateFailed(t *testing.T) {
+func TestEurekaClient_RemoveStatusOverrideFailed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -208,8 +168,5 @@ func TestEurekaClient_BackInServiceUpdateFailed(t *testing.T) {
 		BaseURL: srv.URL,
 	}
 
-	err := cli.BackInService("test-app", "test-instance")
-	if err != ErrStatusUpdateFailed {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.EqualError(t, cli.RemoveStatusOverride("test-app", "test-instance"), ErrStatusUpdateFailed.Error())
 }
