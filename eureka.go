@@ -24,8 +24,8 @@ type Instance struct {
 }
 
 type Port struct {
-	Enabled bool `json:"enabled"`
-	Port    int  `json:"port"`
+	Enabled bool `json:"@enabled"`
+	Port    int  `json:"$"`
 }
 
 func (cli *EurekaClient) RegisterApplication(instance Instance) error {
